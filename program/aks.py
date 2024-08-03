@@ -8,17 +8,16 @@ import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when, avg, stddev, corr, desc
 from pyspark.sql.window import Window
-# Import Azure Blob storage libraries
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 # Config to suppress warning
 import warnings
 warnings.filterwarnings("ignore")
 RUNNING = 'online' # 'online'
+DATASET = 'kc_house_data.csv'
 
 # Prepare dataset, paths
 if RUNNING == 'local':
     cur_dir = os.getcwd()
-    data_path = os.path.join(cur_dir, 'house-prices.csv')
+    data_path = os.path.join(cur_dir, DATASET)
     output_dir = os.path.join(cur_dir, 'output')
     chart_outputs = [
         os.path.join(output_dir, f'c{i}.png') for i in range(1, 5)
@@ -27,16 +26,9 @@ if RUNNING == 'local':
         os.path.join(output_dir, f'q{i}.csv') for i in range(1, 5)
     ]
 elif RUNNING == 'online':
-    # Azure Blob storage configuration
-    AZURE_STORAGE_CONNECTION_STRING = "your_connection_string"
-    CONTAINER_NAME = "your_container_name"
-    
-    # Initialize BlobServiceClient
-    blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-    
-    data_path = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/house-prices.csv"
-    output_dir = f"https://{blob_service_client.account_name}.blob.core.windows.net/{CONTAINER_NAME}/output"
+    HOST_URL = 'abfss://<change_here>@<change_here>/'
+    data_path = f"{HOST_URL}/{DATASET}"
+    output_dir = f"{HOST_URL}/output"
     chart_outputs = [
         f"{output_dir}/c{i}.png" for i in range(1, 5)
     ]

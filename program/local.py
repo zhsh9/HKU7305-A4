@@ -13,11 +13,12 @@ import warnings
 warnings.filterwarnings("ignore")
 os.environ['SPARK_LOCAL_IP'] = 'your_local_ip'
 RUNNING = 'local' # 'online'
+DATASET = 'kc_house_data.csv'
 
 # Prepare dataset, paths
 if RUNNING == 'local':
     cur_dir = os.getcwd()
-    data_path = os.path.join(cur_dir, 'house-prices.csv')
+    data_path = os.path.join(cur_dir, DATASET)
     output_dir = os.path.join(cur_dir, 'output')
     chart_outputs = [
         os.path.join(output_dir, f'c{i}.png') for i in range(1, 5)
