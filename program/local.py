@@ -47,14 +47,14 @@ df = spark.read.csv(
 
 # --------------------------------------- Q1 ---------------------------------------
 # Select relevant features and target variable
-selected_df = df.select('OverallQual', 'GrLivArea', 'GarageCars', 'SalePrice')
+selected_df = df.select('bedrooms', 'bathrooms', 'sqft_living', 'price')
 
 # Group by multiple features and calculate average house price
-grouped_df = selected_df.groupBy('OverallQual', 'GrLivArea', 'GarageCars').agg(avg('SalePrice').alias('avg_price'))
+grouped_df = selected_df.groupBy('bedrooms', 'bathrooms', 'sqft_living').agg(avg('price').alias('avg_price'))
 
 # Calculate 0.01 and 0.99 quantiles for avg_price
-THRESHOLD_SMALL_PERC = 0.10
-THRESHOLD_LARGE_PERC = 0.90
+THRESHOLD_SMALL_PERC = 0.01
+THRESHOLD_LARGE_PERC = 0.99
 RELATIVE_ERROR = 0.0001
 quantiles = grouped_df.approxQuantile('avg_price', [THRESHOLD_SMALL_PERC, THRESHOLD_LARGE_PERC], RELATIVE_ERROR)
 threshold_small, threshold_large = quantiles
@@ -77,16 +77,17 @@ if RUNNING == 'local':
     ax = fig.add_subplot(111, projection='3d')
 
     # Plot all data points (green, smaller, more transparent)
-    ax.scatter(all_groups['OverallQual'], all_groups['GrLivArea'], all_groups['GarageCars'], 
-            c='g', marker='o', s=20, alpha=0.5, label='Other groups')
+    ax.scatter(all_groups['bedrooms'], all_groups['bathrooms'], all_groups['sqft_living'], 
+               c='g', marker='o', s=20, alpha=0.5, label='Other groups')
+
     # Plot significant data points (red, larger, less transparent)
-    ax.scatter(significant_groups['OverallQual'], significant_groups['GrLivArea'], significant_groups['GarageCars'], 
-            c='r', marker='^', s=40, alpha=1.0, label='Significant groups')
+    ax.scatter(significant_groups['bedrooms'], significant_groups['bathrooms'], significant_groups['sqft_living'], 
+               c='r', marker='^', s=40, alpha=1.0, label='Significant groups')
 
     # Set labels
-    ax.set_xlabel('OverallQual')
-    ax.set_ylabel('GrLivArea')
-    ax.set_zlabel('GarageCars')
+    ax.set_xlabel('Bedrooms')
+    ax.set_ylabel('Bathrooms')
+    ax.set_zlabel('Sqft Living')
     ax.set_title('3D Plot of House Features')
     # Display legend
     ax.legend()
@@ -98,13 +99,13 @@ if RUNNING == 'local':
 
 # --------------------------------------- Q2 ---------------------------------------
 # Select the required columns
-df_selected = df.select("Neighborhood", "YearBuilt", "SalePrice")
+df_selected = df.select("zipcode", "yr_built", "price")
 
-# Step 1: Group by Neighborhood and YearBuilt, and calculate the average house price
-grouped_df = df_selected.groupBy("Neighborhood", "YearBuilt").agg(avg("SalePrice").alias("avg_price"))
+# Step 1: Group by zipcode and yr_built, and calculate the average house price
+grouped_df = df_selected.groupBy("zipcode", "yr_built").agg(avg("price").alias("avg_price"))
 
 # Step 2: Use pivot to perform data pivoting to compare house price differences across different construction years
-pivot_df = grouped_df.groupBy("Neighborhood").pivot("YearBuilt").avg("avg_price")
+pivot_df = grouped_df.groupBy("zipcode").pivot("yr_built").avg("avg_price")
 
 # Save the results
 pivot_df.coalesce(1).write.csv(question_outputs[1], header=True, mode='overwrite', sep=',')
@@ -127,56 +128,76 @@ if RUNNING == 'local':
     filled_pivot_df.show(n=3)
 
 if RUNNING == 'local':
-    # Plot the line chart
-    fig = plt.figure(figsize=(28, 7))
+    # Sort by zipcode in ascending order
+    pivot_pd_df.sort_values(by='zipcode', inplace=True)
 
-    # Set the neighborhood as the index
-    pivot_pd_df.set_index('Neighborhood', inplace=True)
+    # Divide the chart into 4 subplots, 2 rows and 2 columns
+    num_parts = 4
+    num_rows, num_cols = 2, 2
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=(30, 10))
 
-    # Transpose the DataFrame for plotting
+    # Calculate the number of zipcodes in each subplot
+    num_zipcodes = len(pivot_pd_df)
+    zipcodes_per_part = (num_zipcodes + num_parts - 1) // num_parts  # Round up
+
+    # Set zipcode as the index
+    pivot_pd_df.set_index('zipcode', inplace=True)
+
+    # Transpose DataFrame for plotting
     pivot_pd_df_transpose = pivot_pd_df.transpose()
 
-    # Plot the price curve for each neighborhood
-    for neighborhood in pivot_pd_df_transpose.columns:
-        plt.plot(pivot_pd_df_transpose.index, pivot_pd_df_transpose[neighborhood], label=neighborhood)
+    # Get the list of years
+    years = [int(i) for i in pivot_pd_df_transpose.index.tolist()]
 
-    # Add legend
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+    # Plot each subplot
+    for i in range(num_parts):
+        start_idx = i * zipcodes_per_part
+        end_idx = min((i + 1) * zipcodes_per_part, num_zipcodes)
+        zipcodes = pivot_pd_df.index[start_idx:end_idx]
 
-    # Add title and labels
-    plt.title('House Prices Over Time by Neighborhood')
-    plt.xlabel('Year Built')
-    plt.ylabel('Average Sale Price')
+        ax = axs[i // num_cols, i % num_cols]  # Get the axis of the current subplot
+        for zipcode in zipcodes:
+            ax.plot(years, pivot_pd_df_transpose[zipcode], label=str(zipcode))
 
-    # Rotate x-axis labels for better display
-    plt.xticks(rotation=45)
+        # Add legend
+        ax.legend(bbox_to_anchor=(1, 1), loc='upper left', fontsize='small')
 
-    # Show grid
-    plt.grid(True)
+        # Add title and labels
+        ax.set_title(f'House Prices Over yr_built by zipcode (Group {i + 1})')
+        ax.set_xlabel('Year Built')
+        ax.set_ylabel('Average Sale Price')
 
-    # Display the chart
+        # Rotate x-axis labels for better display
+        ax.set_xticklabels(ax.get_xticks(), rotation=45)
+
+        # Show grid
+        ax.grid(True)
+
+    # Adjust layout to avoid overlap
     plt.tight_layout()
-    plt.show()
     
+    # Display the chart
+    plt.show()
+
     # Save the chart
     fig.savefig(chart_outputs[1])
 
 # --------------------------------------- Q3 ---------------------------------------
 # Data preprocessing
-# Filter out records with non-null SalePrice
-df = df.filter(df.SalePrice.isNotNull())
-# Fill missing values in YearRemodAdd
-df = df.fillna({'YearRemodAdd': df.agg({'YearBuilt': 'max'}).collect()[0][0]})
+# Filter out records with non-null price
+df = df.filter(df.price.isNotNull())
+# Fill missing values in yr_renovated
+df = df.fillna({'yr_renovated': df.agg({'yr_built': 'max'}).collect()[0][0]})
 
 # Feature engineering
 # Create IsRenovated column to indicate whether the house is renovated; 1 for renovated, 0 for not renovated
-df = df.withColumn("IsRenovated", when(col("YearRemodAdd") > col("YearBuilt"), 1).otherwise(0))
+df = df.withColumn("IsRenovated", when(col("yr_renovated") > col("yr_built"), 1).otherwise(0))
 
 # Grouping and aggregation
-# Group by IsRenovated and calculate the average and standard deviation of SalePrice
+# Group by IsRenovated and calculate the average and standard deviation of price
 grouped_df = df.groupBy("IsRenovated").agg(
-    avg("SalePrice").alias("AveragePrice"),
-    stddev("SalePrice").alias("PriceStdDev")
+    avg("price").alias("AveragePrice"),
+    stddev("price").alias("PriceStdDev")
 )
 
 # Calculate the price difference before and after renovation
@@ -196,30 +217,30 @@ print(f"Price difference due to renovation: {price_diff}")
 
 # --------------------------------------- Q4 ---------------------------------------
 # Data preprocessing
-# Filter out records with non-null SalePrice
-df = df.filter(df.SalePrice.isNotNull())
+# Filter out records with non-null price
+df = df.filter(df.price.isNotNull())
 
 # Handle missing values (choose a filling strategy based on specific needs)
 df = df.fillna(0)
 
 # Feature selection
-# Calculate the correlation between each numeric feature and SalePrice
+# Calculate the correlation between each numeric feature and price
 numeric_features = [t[0] for t in df.dtypes if t[1] == 'int' or t[1] == 'double']
 correlations = []
 for feature in numeric_features:
-    if feature != 'SalePrice':
-        corr_value = df.stat.corr('SalePrice', feature)
+    if feature != 'price':
+        corr_value = df.stat.corr('price', feature)
         correlations.append((feature, corr_value))
 
 # Convert the correlation results to a DataFrame
 correlation_df = spark.createDataFrame(correlations, ["Feature", "Correlation"])
 
-# Calculate the correlation of all features with SalePrice and sort by correlation in descending order
+# Calculate the correlation of all features with price and sort by correlation in descending order
 correlated_features = correlation_df.orderBy(col("Correlation").desc())
 
 # Export the results to a CSV file
 correlated_features.coalesce(1).write.csv(question_outputs[3], header=True, mode='overwrite', sep=',')
 
 # Print the top 5 features with the highest correlation
-print("[+] Top 5 highly correlated features with SalePrice:")
+print("[+] Top 5 highly correlated features with price:")
 correlated_features.show(n=5)
