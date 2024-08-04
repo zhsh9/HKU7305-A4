@@ -6,6 +6,26 @@ FROM apache/spark
 #promote privilege to root 
 USER root
 
+# If you want to use the mirror site in xxx, you can use the following code. If not, just comment it out.
+# Set basic runtime and update sources.list
+RUN mv /etc/apt/sources.list /etc/apt/sources.list.bak
+RUN echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list && \
+    echo "# deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "# deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "# deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "" >> /etc/apt/sources.list && \
+    echo "# 以下安全更新软件源包含了官方源与镜像站配置，如有需要可自行修改注释切换" >> /etc/apt/sources.list && \
+    echo "deb http://security.ubuntu.com/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "# deb-src http://security.ubuntu.com/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "" >> /etc/apt/sources.list && \
+    echo "# 预发布软件源，不建议启用" >> /etc/apt/sources.list && \
+    echo "# deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-proposed main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "# # deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ noble-proposed main restricted universe multiverse" >> /etc/apt/sources.list
+# Set pip source
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
 # Set basic runtime
 RUN apt-get update && apt-get install build-essential -y
 RUN apt-get install vim -y
